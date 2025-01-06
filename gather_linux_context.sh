@@ -505,7 +505,7 @@ collect_system_logs() {
     run_command_as_su "dmesg | tail -n 50"
 
     echo ""
-    echo "---- Last 50 lines of syslog (if available) ----"
+    echo "---- Last 50 lines of syslog or messages (if available) ----"
     if [ -f /var/log/syslog ]; then
       tail -n 50 /var/log/syslog
     elif [ -f /var/log/messages ]; then
@@ -516,7 +516,16 @@ collect_system_logs() {
   else
     echo "/var/log not found."
   fi
+
+  echo ""
+  echo "---- Recent logs from journalctl ----"
+  if command -v journalctl >/dev/null 2>&1; then
+    journalctl -n 50 --no-pager
+  else
+    echo "journalctl not found on this system."
+  fi
 }
+
 
 # Main function to orchestrate all tasks
 main() {
