@@ -31,6 +31,8 @@ show_help() {
   echo "  -D  Collect Docker information"
   echo "  -P  Collect Python information"
   echo "  -A  Collect all information"
+  echo "  -U  Check system update status"
+  echo "  -F  Filter installed packages by keyword"
   echo "  -h  Show this help message"
 }
 
@@ -527,45 +529,74 @@ collect_system_update_status() {
 
 
 collect_installed_packages() {
+  local filter="$1"
   echo "============================================================"
   echo "               INSTALLED PACKAGES / VERSIONS"
   echo "============================================================"
+  echo "filter = $filter"
 
   if command -v apt &>/dev/null; then
     # Debian/Ubuntu (APT)
     echo "---- Debian/Ubuntu (APT) ----"
-    # apt list --installed can be noisy, so you may want to filter or adjust formatting
-    apt list --installed 2>/dev/null
+    if [ -n "$filter" ]; then
+      apt list --installed 2>/dev/null | grep "$filter"
+    else
+      apt list --installed 2>/dev/null
+    fi
 
   elif command -v dpkg-query &>/dev/null; then
     # Fallback for Debian/Ubuntu-based systems without 'apt'
     echo "---- Debian/Ubuntu (dpkg-query) ----"
-    dpkg-query -W -f='${Package} ${Version}\n'
+    if [ -n "$filter" ]; then
+      dpkg-query -W -f='${Package} ${Version}\n' | grep "$filter"
+    else
+      dpkg-query -W -f='${Package} ${Version}\n'
+    fi
 
   elif command -v dnf &>/dev/null; then
     # Fedora / newer RHEL/CentOS (DNF)
     echo "---- Fedora/RHEL/CentOS (DNF) ----"
-    dnf list installed 2>/dev/null
+    if [ -n "$filter" ]; then
+      dnf list installed 2>/dev/null | grep "$filter"
+    else
+      dnf list installed 2>/dev/null
+    fi
 
   elif command -v yum &>/dev/null; then
     # Older RHEL/CentOS (YUM)
     echo "---- RHEL/CentOS (YUM) ----"
-    yum list installed 2>/dev/null
+    if [ -n "$filter" ]; then
+      yum list installed 2>/dev/null | grep "$filter"
+    else
+      yum list installed 2>/dev/null
+    fi
 
   elif command -v pacman &>/dev/null; then
     # Arch Linux / derivatives (Pacman)
     echo "---- Arch/Manjaro (Pacman) ----"
-    pacman -Q
+    if [ -n "$filter" ]; then
+      pacman -Q | grep "$filter"
+    else
+      pacman -Q
+    fi
 
   elif command -v zypper &>/dev/null; then
     # openSUSE / SLE (Zypper)
     echo "---- openSUSE/SLE (Zypper) ----"
-    zypper search --installed-only
+    if [ -n "$filter" ]; then
+      zypper search --installed-only | grep "$filter"
+    else
+      zypper search --installed-only
+    fi
 
   elif command -v rpm &>/dev/null; then
     # Generic RPM-based fallback
     echo "---- RPM-based system (rpm -qa) ----"
-    rpm -qa --qf '%{NAME} %{VERSION}-%{RELEASE}\n'
+    if [ -n "$filter" ]; then
+      rpm -qa --qf '%{NAME} %{VERSION}-%{RELEASE}\n' | grep "$filter"
+    else
+      rpm -qa --qf '%{NAME} %{VERSION}-%{RELEASE}\n'
+    fi
 
   else
     echo "No known package manager detected or installed."
@@ -574,7 +605,6 @@ collect_installed_packages() {
   echo
   echo "============================================================"
 }
-
 
 # Collect running processes
 collect_processes() {
@@ -905,11 +935,12 @@ main() {
   local detect_virtualization=false
   local collect_python=false
   local collect_system_update=false
+  local filter=""
 
   local check_sudo_opt=false
 
   # Parse command line options
-  while getopts "ucsHtnfbprvelDAhBMVPU" opt; do
+  while getopts "ucsHtnfbprvelDAhBMVPUF:" opt; do
     case $opt in
       u) collect_user=true ;;
       c) collect_command_paths=true ;;
@@ -931,6 +962,7 @@ main() {
       V) detect_virtualization=true ;;
       P) collect_python=true ;;
       U) collect_system_update=true ;;
+      F) filter="$OPTARG" ;;
       h) show_help; exit 0 ;;
       *) show_help; exit 1 ;;
     esac
@@ -987,7 +1019,7 @@ main() {
   [ "$collect_network" = true ] && collect_network_info
   [ "$collect_nfs" = true ] && collect_nfs_info
   [ "$collect_busybox" = true ] && collect_busybox_info
-  [ "$collect_packages" = true ] && collect_installed_packages
+  [ "$collect_packages" = true ] && collect_installed_packages "$filter"
   [ "$collect_processes" = true ] && collect_processes
   [ "$collect_services" = true ] && collect_services_status
   [ "$collect_env" = true ] && collect_environment_variables
