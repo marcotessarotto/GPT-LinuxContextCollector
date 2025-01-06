@@ -318,10 +318,9 @@ main() {
     esac
   done
 
-  # If no options were provided, show help
+  # If no options were provided, set collect_all to true
   if [ $OPTIND -eq 1 ]; then
-    show_help
-    exit 1
+    collect_all=true
   fi
 
   # If collect_all flag is set, run all functions
