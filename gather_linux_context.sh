@@ -430,17 +430,143 @@ collect_busybox_info() {
   echo "============================================================"
 }
 
-# Collect installed packages
+
+collect_system_update_status() {
+  echo "=== Checking System Update Status ==="
+
+  # Detect which package manager is available
+  if command -v apt-get &>/dev/null; then
+    # Debian/Ubuntu-based systems
+    echo "Detected apt-get (Debian/Ubuntu-based)."
+    echo "Refreshing package index..."
+    sudo apt-get update -qq
+
+    # Check for upgradable packages (simulate upgrade, count lines).
+    local updates
+    updates=$(apt-get --just-print upgrade 2>/dev/null | grep -c '^Inst ')
+    if [ "$updates" -gt 0 ]; then
+      echo "There are $updates packages that can be upgraded."
+      echo "System is behind in terms of updates."
+    else
+      echo "System appears up to date."
+    fi
+
+  elif command -v dnf &>/dev/null; then
+    # Fedora or newer RHEL/CentOS (dnf-based)
+    echo "Detected dnf (Fedora/RHEL/CentOS)."
+    echo "Refreshing package index..."
+    sudo dnf check-update -q &>/dev/null
+    local return_code=$?
+
+    # dnf check-update exits with:
+    # 100 if there are packages to update
+    # 0 if there are no packages to update
+    if [ "$return_code" -eq 100 ]; then
+      echo "System is behind in terms of updates (dnf check-update found packages)."
+    else
+      echo "System appears up to date."
+    fi
+
+  elif command -v yum &>/dev/null; then
+    # Older RHEL/CentOS (yum-based)
+    echo "Detected yum (RHEL/CentOS)."
+    echo "Refreshing package index..."
+    sudo yum check-update -q &>/dev/null
+    local return_code=$?
+
+    # yum check-update returns:
+    # 100 if there are updates
+    # 0 if none are available
+    if [ "$return_code" -eq 100 ]; then
+      echo "System is behind in terms of updates (yum check-update found packages)."
+    else
+      echo "System appears up to date."
+    fi
+
+  elif command -v pacman &>/dev/null; then
+    # Arch Linux and derivatives
+    echo "Detected pacman (Arch Linux)."
+    echo "Refreshing package index..."
+    sudo pacman -Sy --noconfirm &>/dev/null
+
+    # List of outdated packages
+    local outdated
+    outdated=$(pacman -Qu 2>/dev/null)
+    if [ -n "$outdated" ]; then
+      echo "Outdated packages detected:"
+      echo "$outdated"
+      echo "System is behind in terms of updates."
+    else
+      echo "System appears up to date."
+    fi
+
+  elif command -v zypper &>/dev/null; then
+    # openSUSE / SUSE Linux Enterprise
+    echo "Detected zypper (openSUSE/SLE)."
+    echo "Refreshing package index..."
+    sudo zypper refresh -q &>/dev/null
+
+    # Check for available updates
+    local updates
+    updates=$(zypper list-updates 2>/dev/null | grep -v 'Loading repository data...' | grep -vcE 'Repository|Name|No updates found')
+    if [ "$updates" -gt 0 ]; then
+      echo "There are $updates packages that can be upgraded."
+      echo "System is behind in terms of updates."
+    else
+      echo "System appears up to date."
+    fi
+
+  else
+    # If we reach here, we didn't detect a known package manager
+    echo "No recognized package manager found (apt, dnf, yum, pacman, zypper)."
+    echo "Cannot determine update status."
+  fi
+
+  echo "=== Update Status Check Complete ==="
+}
+
+
 collect_installed_packages() {
   echo "============================================================"
   echo "               INSTALLED PACKAGES / VERSIONS"
   echo "============================================================"
-  if command -v dpkg >/dev/null 2>&1; then
-    echo "---- Debian/Ubuntu based (dpkg-query for versions) ----"
+
+  if command -v apt &>/dev/null; then
+    # Debian/Ubuntu (APT)
+    echo "---- Debian/Ubuntu (APT) ----"
+    # apt list --installed can be noisy, so you may want to filter or adjust formatting
+    apt list --installed 2>/dev/null
+
+  elif command -v dpkg-query &>/dev/null; then
+    # Fallback for Debian/Ubuntu-based systems without 'apt'
+    echo "---- Debian/Ubuntu (dpkg-query) ----"
     dpkg-query -W -f='${Package} ${Version}\n'
-  elif command -v rpm >/dev/null 2>&1; then
-    echo "---- RedHat/CentOS based (rpm -qa) ----"
+
+  elif command -v dnf &>/dev/null; then
+    # Fedora / newer RHEL/CentOS (DNF)
+    echo "---- Fedora/RHEL/CentOS (DNF) ----"
+    dnf list installed 2>/dev/null
+
+  elif command -v yum &>/dev/null; then
+    # Older RHEL/CentOS (YUM)
+    echo "---- RHEL/CentOS (YUM) ----"
+    yum list installed 2>/dev/null
+
+  elif command -v pacman &>/dev/null; then
+    # Arch Linux / derivatives (Pacman)
+    echo "---- Arch/Manjaro (Pacman) ----"
+    pacman -Q
+
+  elif command -v zypper &>/dev/null; then
+    # openSUSE / SLE (Zypper)
+    echo "---- openSUSE/SLE (Zypper) ----"
+    zypper search --installed-only
+
+  elif command -v rpm &>/dev/null; then
+    # Generic RPM-based fallback
+    echo "---- RPM-based system (rpm -qa) ----"
     rpm -qa --qf '%{NAME} %{VERSION}-%{RELEASE}\n'
+
   else
     echo "No known package manager detected or installed."
   fi
@@ -448,6 +574,7 @@ collect_installed_packages() {
   echo
   echo "============================================================"
 }
+
 
 # Collect running processes
 collect_processes() {
@@ -777,11 +904,12 @@ main() {
   local collect_modules_drivers=false
   local detect_virtualization=false
   local collect_python=false
+  local collect_system_update=false
 
   local check_sudo_opt=false
 
   # Parse command line options
-  while getopts "ucsHtnfbprvelDAhBMVP" opt; do
+  while getopts "ucsHtnfbprvelDAhBMVPU" opt; do
     case $opt in
       u) collect_user=true ;;
       c) collect_command_paths=true ;;
@@ -802,6 +930,7 @@ main() {
       M) collect_modules_drivers=true ;;
       V) detect_virtualization=true ;;
       P) collect_python=true ;;
+      U) collect_system_update=true ;;
       h) show_help; exit 0 ;;
       *) show_help; exit 1 ;;
     esac
@@ -843,6 +972,7 @@ main() {
     collect_modules_drivers=true
     detect_virtualization=true
     collect_python=true
+    collect_system_update=true
   fi
 
   # Run functions based on flags
@@ -864,6 +994,7 @@ main() {
   [ "$collect_logs" = true ] && collect_system_logs
   [ "$collect_docker" = true ] && collect_docker_info
   [ "$collect_python" = true ] && collect_python_info
+  [ "$collect_system_update" = true ] && collect_system_update_status
 
 
   echo ""
