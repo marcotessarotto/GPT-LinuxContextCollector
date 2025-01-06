@@ -33,7 +33,7 @@ The script is designed to streamline the process of providing relevant system co
 
 1. Clone the repository:
    ```bash
-   git clone https://github.com/yourusername/GPT-LinuxContextCollector.git
+   git clone https://github.com/marcotessarotto/GPT-LinuxContextCollector
    cd GPT-LinuxContextCollector
 
 2. Make the script executable:
