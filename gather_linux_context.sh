@@ -4,6 +4,9 @@
 # A modular script to gather detailed system information from a Linux OS instance.
 # Designed for use with ChatGPT to provide context for troubleshooting or analysis.
 
+global version="1.0.0"
+global verbose_output=false
+
 # Function to show help message
 show_help() {
   echo "Usage: $0 [options]"
@@ -14,6 +17,8 @@ show_help() {
   echo "  -s  Collect basic system information"
   echo "  -D  Collect Docker information"
   echo "  -H  Collect hardware information"
+  echo "  -M  Collect kernel modules and drivers information"
+  echo "  -B  Collect system boot and shutdown history"
   echo "  -t  Collect storage information"
   echo "  -n  Collect network configuration"
   echo "  -f  Collect NFS configuration"
@@ -68,6 +73,24 @@ collect_user_info() {
   echo "Home directory: $HOME"
   echo "Current shell: $SHELL"
 
+}
+
+# Collect system boot and shutdown history
+collect_boot_shutdown_history() {
+  echo "============================================================"
+  echo "              SYSTEM BOOT & SHUTDOWN HISTORY"
+  echo "============================================================"
+
+  echo "---- Recent Reboots ----"
+  last reboot
+
+  if command -v systemd-analyze >/dev/null 2>&1; then
+    echo ""
+    echo "---- Boot Performance Details ----"
+    systemd-analyze --no-stream blame
+  else
+    echo "systemd-analyze not available."
+  fi
 }
 
 # Collect absolute paths of commands/tools
@@ -159,6 +182,61 @@ collect_docker_info() {
   echo "---- Docker Volumes ----"
   echo
   docker volume ls || echo "Failed to list Docker volumes."
+
+  echo
+  echo "============================================================"
+}
+
+collect_modules_drivers_info() {
+  echo "============================================================"
+  echo "              KERNEL MODULES AND DRIVERS INFORMATION"
+  echo "============================================================"
+
+  # 1. Collect loaded modules with lsmod (if available)
+  echo "----- Kernel Modules (lsmod) -----"
+  if command -v lsmod &>/dev/null; then
+    echo "Collecting loaded modules via lsmod..."
+    lsmod
+  else
+    echo "lsmod not found. Cannot list currently loaded modules."
+    echo "Warning: lsmod is not installed or not in PATH."
+  fi
+
+  # 2. If modinfo is available, probe some critical modules
+  echo -e "\n----- Critical Modules Info (modinfo) -----"
+  if command -v modinfo &>/dev/null; then
+    # Define a list of critical modules (modify as needed)
+    local critical_modules=("ext4" "e1000e" "iwlwifi" "nvidia" "amdgpu" "xfs" "zfs" "btrfs" "nouveau")
+    local critical_modules=("acpi_cpufreq" "af_packet" "ahci" "alx" "amdgpu" "asus_laptop" "ath" "ath9k" "ath9k_common" "ath9k_hw" "bnep" "bluetooth" "btrfs" "ccm" "cdrom" "cfg80211" "cifs" "cp210x" "crc16" "crc32c_intel" "cryptd" "crypto_user" "dm_crypt" "dm_mirror" "dm_mod" "dm_region_hash" "drm" "drm_kms_helper" "e1000e" "ext4" "fuse" "gf128mul" "ghash_clmulni_intel" "hid" "hid_generic" "hid_logitech" "i2c_piix4" "i915" "input_leds" "intel_cstate" "intel_powerclamp" "intel_rapl_msr" "ip_tables" "ipt_MASQUERADE" "iwldvm" "iwlwifi" "joydev" "jbd2" "kvm" "kvm_intel" "ledtrig_audio" "libata" "lp" "lpc_ich" "mac80211" "md4" "md_mod" "mei" "mei_hdcp" "mei_me" "msr" "mousedev" "mxm_wmi" "nouveau" "nvidia" "parport" "parport_pc" "pcbc" "psmouse" "rfcomm" "rtsx_pci" "rtsx_pci_sdmmc" "scsi_mod" "sd_mod" "serio_raw" "sha256_generic" "snd" "snd_hda_codec" "snd_hda_codec_hdmi" "snd_hda_codec_realtek" "snd_hda_core" "snd_hda_intel" "snd_hwdep" "snd_intel_dspcfg" "snd_pcm" "snd_seq" "snd_seq_device" "snd_timer" "soundcore" "sr_mod" "uas" "usbhid" "usb_storage" "uvcvideo" "video" "wacom" "wl" "x86_pkg_temp_thermal" "xfs" "zfs")
+
+    echo "Probing critical modules with modinfo..."
+    for module in "${critical_modules[@]}"; do
+#      echo "Module: $module"
+      # Execute modinfo; if the module isn't found, it will display an error
+      # if verbose_output is enabled, run this command:
+      if [ "$verbose_output" = true ]; then
+        modinfo "$module" 2>&1 || echo "Module $module not found."
+      else
+        if modinfo "$module" >/dev/null 2>&1; then
+          module_status="Module $module exists."
+          if lsmod | grep -q "^$module"; then
+            module_status="$module_status Loaded."
+          else
+            module_status="$module_status Not loaded."
+          fi
+          module_path=$(modinfo -n "$module")
+          echo "$module_status Path: $module_path"
+        else
+          echo "Module $module not found."
+        fi
+      fi
+
+#      echo
+    done
+  else
+    echo "modinfo not found. Skipping probing of critical modules."
+    echo "Warning: modinfo is not installed or not in PATH."
+  fi
 
   echo
   echo "============================================================"
@@ -414,11 +492,13 @@ main() {
   local collect_env=false
   local collect_logs=false
   local collect_docker=false
+  local collect_boot_shutdown=false
+  local collect_modules_drivers=false
 
   local check_sudo_opt=false
 
   # Parse command line options
-  while getopts "ucsHtnfbprvelDAh" opt; do
+  while getopts "ucsHtnfbprvelDAhBM" opt; do
     case $opt in
       u) collect_user=true ;;
       c) collect_command_paths=true ;;
@@ -435,6 +515,8 @@ main() {
       l) collect_logs=true ;;
       D) collect_docker=true ;;
       A) collect_all=true ;;
+      B) collect_boot_shutdown=true ;;
+      M) collect_modules_drivers=true ;;
       h) show_help; exit 0 ;;
       *) show_help; exit 1 ;;
     esac
@@ -472,13 +554,17 @@ main() {
     collect_env=true
     collect_logs=true
     collect_docker=true
+    collect_boot_shutdown=true
+    collect_modules_drivers=true
   fi
 
   # Run functions based on flags
   [ "$collect_user" = true ] && collect_user_info
   [ "$collect_command_paths" = true ] && collect_command_paths
   [ "$collect_system" = true ] && collect_system_info
+  [ "$collect_boot_shutdown" = true ] && collect_boot_shutdown_history
   [ "$collect_hardware" = true ] && collect_hardware_info
+  [ "$collect_modules_drivers" = true ] && collect_modules_drivers_info
   [ "$collect_storage" = true ] && collect_storage_info
   [ "$collect_network" = true ] && collect_network_info
   [ "$collect_nfs" = true ] && collect_nfs_info
@@ -489,6 +575,7 @@ main() {
   [ "$collect_env" = true ] && collect_environment_variables
   [ "$collect_logs" = true ] && collect_system_logs
   [ "$collect_docker" = true ] && collect_docker_info
+
 
   echo ""
   echo "============================================================"
