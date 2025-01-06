@@ -4,6 +4,28 @@
 # A modular script to gather detailed system information from a Linux OS instance.
 # Designed for use with ChatGPT to provide context for troubleshooting or analysis.
 
+# Function to show help message
+show_help() {
+  echo "Usage: $0 [options]"
+  echo ""
+  echo "Options:"
+  echo "  -u  Collect current user information"
+  echo "  -c  Collect full absolute paths of selected commands/tools"
+  echo "  -s  Collect basic system information"
+  echo "  -h  Collect hardware information"
+  echo "  -t  Collect storage information"
+  echo "  -n  Collect network configuration"
+  echo "  -f  Collect NFS configuration"
+  echo "  -b  Collect BusyBox information"
+  echo "  -p  Collect installed packages"
+  echo "  -r  Collect running processes"
+  echo "  -v  Collect systemd services status"
+  echo "  -e  Collect environment variables"
+  echo "  -l  Collect recent system logs"
+  echo "  -a  Collect all information"
+  echo "  -h  Show this help message"
+}
+
 # Check if the script is run as sudo or prompt the user
 check_sudo() {
   if [ "$EUID" -ne 0 ]; then
@@ -271,19 +293,54 @@ collect_system_logs() {
 # Main function to orchestrate all tasks
 main() {
   check_sudo
-  collect_user_info
-  collect_command_paths
-  collect_system_info
-  collect_hardware_info
-  collect_storage_info
-  collect_network_info
-  collect_nfs_info
-  collect_busybox_info
-  collect_installed_packages
-  collect_processes
-  collect_services_status
-  collect_environment_variables
-  collect_system_logs
+  # Initialize flags
+  local collect_all=false
+
+  # Parse command line options
+  while getopts "ucshtnfbprvelah" opt; do
+    case $opt in
+      u) collect_user_info ;;
+      c) collect_command_paths ;;
+      s) collect_system_info ;;
+      h) collect_hardware_info ;;
+      t) collect_storage_info ;;
+      n) collect_network_info ;;
+      f) collect_nfs_info ;;
+      b) collect_busybox_info ;;
+      p) collect_installed_packages ;;
+      r) collect_processes ;;
+      v) collect_services_status ;;
+      e) collect_environment_variables ;;
+      l) collect_system_logs ;;
+      a) collect_all=true ;;
+      h) show_help; exit 0 ;;
+      *) show_help; exit 1 ;;
+    esac
+  done
+
+  # If no options were provided, show help
+  if [ $OPTIND -eq 1 ]; then
+    show_help
+    exit 1
+  fi
+
+  # If collect_all flag is set, run all functions
+  if [ "$collect_all" = true ]; then
+    collect_user_info
+    collect_command_paths
+    collect_system_info
+    collect_hardware_info
+    collect_storage_info
+    collect_network_info
+    collect_nfs_info
+    collect_busybox_info
+    collect_installed_packages
+    collect_processes
+    collect_services_status
+    collect_environment_variables
+    collect_system_logs
+  fi
+
   echo ""
   echo "============================================================"
   echo "              END OF SYSTEM INFORMATION"
@@ -291,5 +348,4 @@ main() {
 }
 
 # Run the main function
-main
-
+main "$@"
