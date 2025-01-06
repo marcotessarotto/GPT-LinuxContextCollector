@@ -12,7 +12,7 @@ show_help() {
   echo "  -u  Collect current user information"
   echo "  -c  Collect full absolute paths of selected commands/tools"
   echo "  -s  Collect basic system information"
-  echo "  -i  Collect hardware information"
+  echo "  -H  Collect hardware information"
   echo "  -t  Collect storage information"
   echo "  -n  Collect network configuration"
   echo "  -f  Collect NFS configuration"
@@ -22,7 +22,7 @@ show_help() {
   echo "  -v  Collect systemd services status"
   echo "  -e  Collect environment variables"
   echo "  -l  Collect recent system logs"
-  echo "  -a  Collect all information"
+  echo "  -A  Collect all information"
   echo "  -h  Show this help message"
 }
 
@@ -41,7 +41,7 @@ check_sudo() {
 }
 
 # Function to run commands with optional sudo
-run_command() {
+run_command_as_su() {
   local cmd="$1"
   echo "---- Running: $cmd ----"
   if [ "$EUID" -ne 0 ]; then
@@ -64,6 +64,9 @@ collect_user_info() {
   echo "Numeric UID: $(id -u)"
   echo "Numeric GID: $(id -g)"
   echo "Groups (current user): $(id -Gn)"
+  echo "Home directory: $HOME"
+  echo "Current shell: $SHELL"
+
 }
 
 # Collect absolute paths of commands/tools
@@ -72,30 +75,33 @@ collect_command_paths() {
   echo "      FULL ABSOLUTE PATHS OF SELECTED COMMANDS/TOOLS"
   echo "============================================================"
 
-local commands_to_check=(
-  apt
-  bash
-  busybox
-  dmesg
-  dpkg
-  dpkg-query
-  exportfs
-  free
-  hostnamectl
-  ip
-  lsblk
-  lsb_release
-  lspci
-  lsusb
-  mount
-  ps
-  rpm
-  service
-  su
-  sudo
-  systemctl
-  uname
-)
+  local commands_to_check=(
+    apt
+    bash
+    busybox
+    dmesg
+    dpkg
+    dpkg-query
+    exportfs
+    free
+    gzip
+    hostnamectl
+    ip
+    lsblk
+    lsb_release
+    lspci
+    lsusb
+    mount
+    ps
+    rpm
+    service
+    su
+    sudo
+    systemctl
+    tar
+    uname
+    xz
+  )
 
   for cmd in "${commands_to_check[@]}"; do
     if command -v "$cmd" >/dev/null 2>&1; then
@@ -127,6 +133,19 @@ collect_system_info() {
 
   echo "---- Kernel Version ----"
   uname -a
+
+  # check if kernel headers are installed
+  if [ -d /usr/src/linux-headers-$(uname -r) ]; then
+    echo "Kernel headers are installed. Path: /usr/src/linux-headers-$(uname -r)"
+  else
+    echo "Kernel headers are not installed."
+  fi
+
+  # output contents of /etc/shells, if the file exists
+  if [ -f /etc/shells ]; then
+    echo "---- /etc/shells ----"
+    cat /etc/shells
+  fi
 }
 
 # Collect hardware information
@@ -136,9 +155,9 @@ collect_hardware_info() {
   echo "============================================================"
   echo "---- CPU Info ----"
   if command -v lscpu >/dev/null 2>&1; then
-    lscpu
+    lscpu | grep -E 'Model name|CPU\(s\)|MHz'
   else
-    cat /proc/cpuinfo
+    grep -E 'model name|cpu cores|cpu MHz' /proc/cpuinfo | uniq
   fi
 
   echo "---- Memory Info ----"
@@ -278,7 +297,7 @@ collect_system_logs() {
   echo "============================================================"
   if [ -d /var/log ]; then
     echo "---- dmesg (kernel ring buffer) ----"
-    run_command "dmesg | tail -n 50"
+    run_command_as_su "dmesg | tail -n 50"
 
     echo ""
     echo "---- Last 50 lines of syslog (if available) ----"
@@ -299,7 +318,7 @@ main() {
 
   # Initialize flags
   local collect_all=false
-  local collect_user=true
+  local collect_user=false
   local collect_command_paths=false
   local collect_system=false
   local collect_hardware=false
@@ -316,12 +335,12 @@ main() {
   local check_sudo_opt=false
 
   # Parse command line options
-  while getopts "ucsitnfbprvelah" opt; do
+  while getopts "ucsHtnfbprvelAh" opt; do
     case $opt in
       u) collect_user=true ;;
       c) collect_command_paths=true ;;
       s) collect_system=true ;;
-      i) collect_hardware=true ;;
+      H) collect_hardware=true ;;
       t) collect_storage=true ;;
       n) collect_network=true ;;
       f) collect_nfs=true ;;
@@ -331,7 +350,7 @@ main() {
       v) collect_services=true ;;
       e) collect_env=true ;;
       l) collect_logs=true ;;
-      a) collect_all=true ;;
+      A) collect_all=true ;;
       h) show_help; exit 0 ;;
       *) show_help; exit 1 ;;
     esac
@@ -341,11 +360,16 @@ main() {
     check_sudo
   fi
 
+  # output a header which includes the date and time
+  echo "============================================================"
+  echo "              SYSTEM INFORMATION - $(date)"
+  echo "============================================================"
 
   # If no options were provided, set collect_all to true
   if [ $OPTIND -eq 1 ]; then
     #collect_all=true
-    collect_all=false
+    collect_user=true
+    collect_system=true
   fi
 
   # If collect_all flag is set, run all functions
