@@ -15,7 +15,6 @@ show_help() {
   echo "  -u  Collect current user information"
   echo "  -c  Collect full absolute paths of selected commands/tools"
   echo "  -s  Collect basic system information"
-  echo "  -D  Collect Docker information"
   echo "  -H  Collect hardware information"
   echo "  -M  Collect kernel modules and drivers information"
   echo "  -V  Detect virtualization"
@@ -29,6 +28,8 @@ show_help() {
   echo "  -v  Collect systemd services status"
   echo "  -e  Collect environment variables"
   echo "  -l  Collect recent system logs"
+  echo "  -D  Collect Docker information"
+  echo "  -P  Collect Python information"
   echo "  -A  Collect all information"
   echo "  -h  Show this help message"
 }
@@ -495,24 +496,31 @@ collect_python_info() {
         local pip_cmd="$interpreter -m pip"
         echo "  pip version: $($pip_cmd --version 2>&1)"
 
-        echo "  Main installed packages (first 10 lines of pip list):"
-        # Show the first 10 lines of pip list
-        $pip_cmd list --disable-pip-version-check 2>&1 | head -n 11
+#        echo "  Main installed packages (first 10 lines of pip list):"
+#        # Show the first 10 lines of pip list
+#        $pip_cmd list --disable-pip-version-check 2>&1 | head -n 11
       else
         echo "  pip is not available for $interpreter"
+      fi
+
+      # Check if venv module is available in Python
+      if "$interpreter" -m venv -h &>/dev/null; then
+        echo "  venv module is available in Python."
+      else
+        echo "  venv module is not available in Python."
       fi
 
       echo
     fi
   done
 
-  # Check if virtualenv is installed
-  echo "Checking virtualenv..."
-  if command -v virtualenv &>/dev/null; then
-    echo "  virtualenv is installed: $(virtualenv --version)"
-  else
-    echo "  virtualenv is not installed."
-  fi
+#  # Check if virtualenv is installed
+#  echo "Checking virtualenv..."
+#  if command -v virtualenv &>/dev/null; then
+#    echo "  virtualenv is installed: $(virtualenv --version)"
+#  else
+#    echo "  virtualenv is not installed."
+#  fi
 
   echo
   echo "============================================================"
@@ -768,11 +776,12 @@ main() {
   local collect_boot_shutdown=false
   local collect_modules_drivers=false
   local detect_virtualization=false
+  local collect_python=false
 
   local check_sudo_opt=false
 
   # Parse command line options
-  while getopts "ucsHtnfbprvelDAhBMV" opt; do
+  while getopts "ucsHtnfbprvelDAhBMVP" opt; do
     case $opt in
       u) collect_user=true ;;
       c) collect_command_paths=true ;;
@@ -792,6 +801,7 @@ main() {
       B) collect_boot_shutdown=true ;;
       M) collect_modules_drivers=true ;;
       V) detect_virtualization=true ;;
+      P) collect_python=true ;;
       h) show_help; exit 0 ;;
       *) show_help; exit 1 ;;
     esac
@@ -832,6 +842,7 @@ main() {
     collect_boot_shutdown=true
     collect_modules_drivers=true
     detect_virtualization=true
+    collect_python=true
   fi
 
   # Run functions based on flags
@@ -852,6 +863,7 @@ main() {
   [ "$collect_env" = true ] && collect_environment_variables
   [ "$collect_logs" = true ] && collect_system_logs
   [ "$collect_docker" = true ] && collect_docker_info
+  [ "$collect_python" = true ] && collect_python_info
 
 
   echo ""
