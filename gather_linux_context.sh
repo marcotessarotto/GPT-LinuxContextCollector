@@ -92,6 +92,9 @@ collect_boot_shutdown_history() {
   else
     echo "systemd-analyze not available."
   fi
+
+  echo
+  echo "============================================================"
 }
 
 # Collect absolute paths of commands/tools
@@ -135,6 +138,9 @@ collect_command_paths() {
       echo "$cmd -> not found"
     fi
   done
+
+  echo
+  echo "============================================================"
 }
 
 collect_docker_info() {
@@ -277,6 +283,9 @@ collect_system_info() {
     echo "---- /etc/shells ----"
     cat /etc/shells
   fi
+
+  echo
+  echo "============================================================"
 }
 
 # Collect hardware information
@@ -310,6 +319,9 @@ collect_hardware_info() {
   else
     echo "lsusb not available."
   fi
+
+  echo
+  echo "============================================================"
 }
 
 # Collect storage information
@@ -319,6 +331,11 @@ collect_storage_info() {
   echo "============================================================"
   echo "---- Disk Usage (df -h) ----"
   df -h
+
+
+
+  echo
+  echo "============================================================"
 }
 
 collect_network_info() {
@@ -387,6 +404,9 @@ collect_nfs_info() {
 
   echo "---- Active NFS mounts ----"
   mount | grep nfs || echo "No active NFS mounts found."
+
+  echo
+  echo "============================================================"
 }
 
 # Collect BusyBox information
@@ -404,6 +424,9 @@ collect_busybox_info() {
   else
     echo "BusyBox not found."
   fi
+
+  echo
+  echo "============================================================"
 }
 
 # Collect installed packages
@@ -420,6 +443,9 @@ collect_installed_packages() {
   else
     echo "No known package manager detected or installed."
   fi
+
+  echo
+  echo "============================================================"
 }
 
 # Collect running processes
@@ -428,7 +454,70 @@ collect_processes() {
   echo "                 RUNNING PROCESSES"
   echo "============================================================"
   ps aux --sort=-%mem
+
+  echo
+  echo "============================================================"
 }
+
+
+collect_python_info() {
+  echo "============================================================"
+  echo "                 PYTHON INFO COLLECTION"
+  echo "============================================================"
+
+  # List of potential Python interpreters to check
+  local python_interpreters=(
+    python
+    python2
+    python3
+    python3.6
+    python3.7
+    python3.8
+    python3.9
+    python3.10
+    python3.11
+    python3.12
+    python3.13
+  )
+
+  # Check each interpreter
+  for interpreter in "${python_interpreters[@]}"; do
+    if command -v "$interpreter" &>/dev/null; then
+      echo "Found interpreter: $interpreter"
+
+      # Get Python version
+      local version
+      version=$("$interpreter" --version 2>&1)
+      echo "  Version: $version"
+
+      # Check pip availability for this interpreter
+      if "$interpreter" -m pip --version &>/dev/null; then
+        local pip_cmd="$interpreter -m pip"
+        echo "  pip version: $($pip_cmd --version 2>&1)"
+
+        echo "  Main installed packages (first 10 lines of pip list):"
+        # Show the first 10 lines of pip list
+        $pip_cmd list --disable-pip-version-check 2>&1 | head -n 11
+      else
+        echo "  pip is not available for $interpreter"
+      fi
+
+      echo
+    fi
+  done
+
+  # Check if virtualenv is installed
+  echo "Checking virtualenv..."
+  if command -v virtualenv &>/dev/null; then
+    echo "  virtualenv is installed: $(virtualenv --version)"
+  else
+    echo "  virtualenv is not installed."
+  fi
+
+  echo
+  echo "============================================================"
+}
+
 
 # Collect systemd services status
 collect_services_status() {
@@ -441,6 +530,8 @@ collect_services_status() {
     echo "systemctl not available. Checking SysV services (service --status-all):"
     service --status-all 2>/dev/null || echo "No SysV init or systemd found."
   fi
+  echo
+  echo "============================================================"
 }
 
 detect_virtualization_status() {
@@ -483,17 +574,142 @@ detect_virtualization_status() {
   fi
 
   echo
-  echo "=== Virtualization check complete ==="
+  echo "============================================================"
 }
 
 
-# Collect environment variables
+#!/usr/bin/env bash
+
 collect_environment_variables() {
   echo "============================================================"
-  echo "                ENVIRONMENT VARIABLES"
+  echo "             FILTERED ENVIRONMENT VARIABLES"
   echo "============================================================"
-  printenv
+
+  # A curated list of common environment variables which typically do not
+  # contain sensitive information. Remove or add variables as needed.
+  # (Listed ~ 100, but adjust to your preference).
+  local safe_vars=(
+    # Shell & user-related
+    "USER"
+    "HOME"
+    "SHELL"
+    "TERM"
+    "HOSTNAME"
+    "LOGNAME"
+    "LANG"
+    "LANGUAGE"
+    "LC_ALL"
+    "PWD"
+    "OLDPWD"
+
+    # Paths & directories
+    "PATH"
+    "MANPATH"
+    "LD_LIBRARY_PATH"
+    "LD_PRELOAD"
+    "PWD"
+    "TMPDIR"
+
+    # Editors & tools
+    "EDITOR"
+    "VISUAL"
+    "BROWSER"
+    "PAGER"
+    "COLORTERM"
+
+    # Session & desktop environment
+    "DISPLAY"
+    "DESKTOP_SESSION"
+    "XDG_SESSION_TYPE"
+    "XDG_SESSION_DESKTOP"
+    "XDG_SESSION_CLASS"
+    "XDG_CURRENT_DESKTOP"
+    "XDG_RUNTIME_DIR"
+    "XDG_CONFIG_DIRS"
+    "XDG_DATA_DIRS"
+    "GNOME_DESKTOP_SESSION_ID"
+    "GNOME_SHELL_SESSION_MODE"
+    "GDMSESSION"
+
+    # Misc common variables
+    "HISTCONTROL"
+    "HISTFILE"
+    "HISTSIZE"
+    "HISTFILESIZE"
+    "PROMPT_COMMAND"
+    "SHLVL"
+    "TERM_PROGRAM"
+    "TERM_PROGRAM_VERSION"
+    "COLORS"
+    "COLUMNS"
+    "LINES"
+    "PS1"
+    "PS2"
+    "PS4"
+    "TZ"
+
+    # Python/Java/Node, etc.
+    "PYTHONPATH"
+    "PYTHONDONTWRITEBYTECODE"
+    "PYTHONUNBUFFERED"
+    "JAVA_HOME"
+    "JRE_HOME"
+    "NODE_ENV"
+    "NODE_PATH"
+
+    # Network & proxy
+    "HTTP_PROXY"
+    "HTTPS_PROXY"
+    "NO_PROXY"
+    "FTP_PROXY"
+    "RSYNC_PROXY"
+
+    # Misc development / build
+    "C_INCLUDE_PATH"
+    "CPLUS_INCLUDE_PATH"
+    "PKG_CONFIG_PATH"
+    "GOPATH"
+    "GOROOT"
+    "RUSTUP_HOME"
+    "CARGO_HOME"
+
+    # AWS / Cloud config (keys/credentials excluded intentionally)
+    "AWS_REGION"
+    "AWS_DEFAULT_REGION"
+    "GOOGLE_CLOUD_PROJECT"
+    "AZURE_SUBSCRIPTION_ID"
+
+    # Docker / Container
+    "DOCKER_HOST"
+    "DOCKER_CERT_PATH"
+    "DOCKER_TLS_VERIFY"
+
+    # Git
+    "GIT_AUTHOR_NAME"
+    "GIT_AUTHOR_EMAIL"
+    "GIT_SSH_COMMAND"
+    "GIT_EDITOR"
+
+    # Misc version control or CI
+    "CI"
+    "CONTINUOUS_INTEGRATION"
+
+    # Add more variables here as desired...
+  )
+
+  # Loop through the "safe" variables and print them if set
+  for var in "${safe_vars[@]}"; do
+    # Check if the variable is set
+    if [ -n "${!var+x}" ]; then
+      echo "$var=${!var}"
+    fi
+  done
+
+  echo
+  echo "============================================================"
 }
+
+
 
 # Collect recent system logs
 collect_system_logs() {
@@ -524,6 +740,9 @@ collect_system_logs() {
   else
     echo "journalctl not found on this system."
   fi
+
+  echo
+  echo "============================================================"
 }
 
 
