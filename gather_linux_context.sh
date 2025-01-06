@@ -12,6 +12,7 @@ show_help() {
   echo "  -u  Collect current user information"
   echo "  -c  Collect full absolute paths of selected commands/tools"
   echo "  -s  Collect basic system information"
+  echo "  -D  Collect Docker information"
   echo "  -H  Collect hardware information"
   echo "  -t  Collect storage information"
   echo "  -n  Collect network configuration"
@@ -112,6 +113,57 @@ collect_command_paths() {
   done
 }
 
+collect_docker_info() {
+  echo "============================================================"
+  echo "                      DOCKER INFORMATION"
+  echo "============================================================"
+
+  # Check if Docker is installed
+  if ! command -v docker >/dev/null 2>&1; then
+    echo "Docker is not installed or not in the system's PATH."
+    echo "============================================================"
+    return
+  fi
+
+  echo
+  echo "---- Docker Version ----"
+  echo
+  docker --version
+
+  echo
+  echo "---- Docker Info ----"
+  echo
+  docker info || echo "Failed to retrieve Docker information."
+
+  echo
+  echo "---- Docker Images ----"
+  echo
+  docker images || echo "Failed to list Docker images."
+
+  echo
+  echo "---- Docker Containers (Running) ----"
+  echo
+  docker ps --format "table {{.ID}}\t{{.Names}}\t{{.Image}}\t{{.Status}}" || echo "Failed to list running containers."
+
+  echo
+  echo "---- Docker Containers (All) ----"
+  echo
+  docker ps -a --format "table {{.ID}}\t{{.Names}}\t{{.Image}}\t{{.Status}}" || echo "Failed to list all containers."
+
+  echo
+  echo "---- Docker Networks ----"
+  echo
+  docker network ls || echo "Failed to list Docker networks."
+
+  echo
+  echo "---- Docker Volumes ----"
+  echo
+  docker volume ls || echo "Failed to list Docker volumes."
+
+  echo
+  echo "============================================================"
+}
+
 # Collect basic system information
 collect_system_info() {
   echo "============================================================"
@@ -190,20 +242,50 @@ collect_storage_info() {
   df -h
 }
 
-# Collect network configuration
 collect_network_info() {
   echo "============================================================"
-  echo "               NETWORK CONFIGURATION"
+  echo "                     NETWORK CONFIGURATION"
   echo "============================================================"
+
+  echo
   echo "---- IP Addresses (ip addr) ----"
+  echo
   ip addr show
 
+  echo
   echo "---- Routing Table (ip route) ----"
+  echo
   ip route show
 
+  echo
   echo "---- DNS Configuration (/etc/resolv.conf) ----"
-  [ -f /etc/resolv.conf ] && cat /etc/resolv.conf || echo "/etc/resolv.conf not found."
+  echo
+  if [ -f /etc/resolv.conf ]; then
+    cat /etc/resolv.conf
+  else
+    echo "/etc/resolv.conf not found."
+  fi
+
+  echo
+  echo "---- Firewall Status ----"
+  echo
+  if command -v firewall-cmd >/dev/null 2>&1; then
+    echo "FirewallD Status:"
+    firewall-cmd --state 2>/dev/null || echo "FirewallD is not running."
+  elif command -v ufw >/dev/null 2>&1; then
+    echo "UFW Status (Uncomplicated Firewall):"
+    ufw status 2>/dev/null || echo "UFW is not running."
+  elif command -v iptables >/dev/null 2>&1; then
+    echo "iptables Status:"
+    iptables -L -n -v 2>/dev/null || echo "iptables is not running or no rules are configured or run script as root."
+  else
+    echo "No recognized firewall management tool found (e.g., FirewallD, UFW, iptables)."
+  fi
+
+  echo
+  echo "============================================================"
 }
+
 
 # Collect NFS configuration
 collect_nfs_info() {
@@ -331,11 +413,12 @@ main() {
   local collect_services=false
   local collect_env=false
   local collect_logs=false
+  local collect_docker=false
 
   local check_sudo_opt=false
 
   # Parse command line options
-  while getopts "ucsHtnfbprvelAh" opt; do
+  while getopts "ucsHtnfbprvelDAh" opt; do
     case $opt in
       u) collect_user=true ;;
       c) collect_command_paths=true ;;
@@ -350,6 +433,7 @@ main() {
       v) collect_services=true ;;
       e) collect_env=true ;;
       l) collect_logs=true ;;
+      D) collect_docker=true ;;
       A) collect_all=true ;;
       h) show_help; exit 0 ;;
       *) show_help; exit 1 ;;
@@ -387,6 +471,7 @@ main() {
     collect_services=true
     collect_env=true
     collect_logs=true
+    collect_docker=true
   fi
 
   # Run functions based on flags
@@ -403,6 +488,7 @@ main() {
   [ "$collect_services" = true ] && collect_services_status
   [ "$collect_env" = true ] && collect_environment_variables
   [ "$collect_logs" = true ] && collect_system_logs
+  [ "$collect_docker" = true ] && collect_docker_info
 
   echo ""
   echo "============================================================"
