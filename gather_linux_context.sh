@@ -12,7 +12,7 @@ show_help() {
   echo "  -u  Collect current user information"
   echo "  -c  Collect full absolute paths of selected commands/tools"
   echo "  -s  Collect basic system information"
-  echo "  -h  Collect hardware information"
+  echo "  -i  Collect hardware information"
   echo "  -t  Collect storage information"
   echo "  -n  Collect network configuration"
   echo "  -f  Collect NFS configuration"
@@ -72,26 +72,30 @@ collect_command_paths() {
   echo "      FULL ABSOLUTE PATHS OF SELECTED COMMANDS/TOOLS"
   echo "============================================================"
 
-  local commands_to_check=(
-    lsb_release
-    lsusb
-    lsblk
-    lspci
-    exportfs
-    busybox
-    dpkg
-    dpkg-query
-    rpm
-    systemctl
-    ps
-    service
-    ip
-    free
-    dmesg
-    mount
-    uname
-    hostnamectl
-  )
+local commands_to_check=(
+  apt
+  bash
+  busybox
+  dmesg
+  dpkg
+  dpkg-query
+  exportfs
+  free
+  hostnamectl
+  ip
+  lsblk
+  lsb_release
+  lspci
+  lsusb
+  mount
+  ps
+  rpm
+  service
+  su
+  sudo
+  systemctl
+  uname
+)
 
   for cmd in "${commands_to_check[@]}"; do
     if command -v "$cmd" >/dev/null 2>&1; then
@@ -292,53 +296,89 @@ collect_system_logs() {
 
 # Main function to orchestrate all tasks
 main() {
-  check_sudo
+
   # Initialize flags
   local collect_all=false
+  local collect_user=true
+  local collect_command_paths=false
+  local collect_system=false
+  local collect_hardware=false
+  local collect_storage=false
+  local collect_network=false
+  local collect_nfs=false
+  local collect_busybox=false
+  local collect_packages=false
+  local collect_processes=false
+  local collect_services=false
+  local collect_env=false
+  local collect_logs=false
+
+  local check_sudo_opt=false
 
   # Parse command line options
-  while getopts "ucshtnfbprvelah" opt; do
+  while getopts "ucsitnfbprvelah" opt; do
     case $opt in
-      u) collect_user_info ;;
-      c) collect_command_paths ;;
-      s) collect_system_info ;;
-      h) collect_hardware_info ;;
-      t) collect_storage_info ;;
-      n) collect_network_info ;;
-      f) collect_nfs_info ;;
-      b) collect_busybox_info ;;
-      p) collect_installed_packages ;;
-      r) collect_processes ;;
-      v) collect_services_status ;;
-      e) collect_environment_variables ;;
-      l) collect_system_logs ;;
+      u) collect_user=true ;;
+      c) collect_command_paths=true ;;
+      s) collect_system=true ;;
+      i) collect_hardware=true ;;
+      t) collect_storage=true ;;
+      n) collect_network=true ;;
+      f) collect_nfs=true ;;
+      b) collect_busybox=true ;;
+      p) collect_packages=true ;;
+      r) collect_processes=true ;;
+      v) collect_services=true ;;
+      e) collect_env=true ;;
+      l) collect_logs=true ;;
       a) collect_all=true ;;
       h) show_help; exit 0 ;;
       *) show_help; exit 1 ;;
     esac
   done
 
+  if [ "$check_sudo_opt" = true ]; then
+    check_sudo
+  fi
+
+
   # If no options were provided, set collect_all to true
   if [ $OPTIND -eq 1 ]; then
-    collect_all=true
+    #collect_all=true
+    collect_all=false
   fi
 
   # If collect_all flag is set, run all functions
   if [ "$collect_all" = true ]; then
-    collect_user_info
-    collect_command_paths
-    collect_system_info
-    collect_hardware_info
-    collect_storage_info
-    collect_network_info
-    collect_nfs_info
-    collect_busybox_info
-    collect_installed_packages
-    collect_processes
-    collect_services_status
-    collect_environment_variables
-    collect_system_logs
+    collect_user=true
+    collect_command_paths=true
+    collect_system=true
+    collect_hardware=true
+    collect_storage=true
+    collect_network=true
+    collect_nfs=true
+    collect_busybox=true
+    collect_packages=true
+    collect_processes=true
+    collect_services=true
+    collect_env=true
+    collect_logs=true
   fi
+
+  # Run functions based on flags
+  [ "$collect_user" = true ] && collect_user_info
+  [ "$collect_command_paths" = true ] && collect_command_paths
+  [ "$collect_system" = true ] && collect_system_info
+  [ "$collect_hardware" = true ] && collect_hardware_info
+  [ "$collect_storage" = true ] && collect_storage_info
+  [ "$collect_network" = true ] && collect_network_info
+  [ "$collect_nfs" = true ] && collect_nfs_info
+  [ "$collect_busybox" = true ] && collect_busybox_info
+  [ "$collect_packages" = true ] && collect_installed_packages
+  [ "$collect_processes" = true ] && collect_processes
+  [ "$collect_services" = true ] && collect_services_status
+  [ "$collect_env" = true ] && collect_environment_variables
+  [ "$collect_logs" = true ] && collect_system_logs
 
   echo ""
   echo "============================================================"
