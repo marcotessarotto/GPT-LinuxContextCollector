@@ -18,6 +18,7 @@ show_help() {
   echo "  -D  Collect Docker information"
   echo "  -H  Collect hardware information"
   echo "  -M  Collect kernel modules and drivers information"
+  echo "  -V  Detect virtualization"
   echo "  -B  Collect system boot and shutdown history"
   echo "  -t  Collect storage information"
   echo "  -n  Collect network configuration"
@@ -442,6 +443,50 @@ collect_services_status() {
   fi
 }
 
+detect_virtualization_status() {
+  echo "============================================================"
+  echo "               VIRTUALIZATION DETECTION"
+  echo "============================================================"
+
+  # 1. Attempt to detect using systemd-detect-virt
+  if command -v systemd-detect-virt &>/dev/null; then
+    echo "-> systemd-detect-virt:"
+    systemd-detect-virt
+  else
+    echo "systemd-detect-virt is not installed or not in PATH."
+  fi
+
+  echo
+
+  # 2. Attempt to detect using virt-what
+  if command -v virt-what &>/dev/null; then
+    echo "-> virt-what:"
+    virt-what
+  else
+    echo "virt-what is not installed or not in PATH."
+  fi
+
+  echo
+
+  # 3. Check /proc/cpuinfo for hypervisor or virtualization flags
+  echo "-> Checking /proc/cpuinfo for hypervisor or virtualization flags..."
+  if grep -Eqi '^flags\s*:.*(vmx|svm)' /proc/cpuinfo; then
+    echo "CPU virtualization support (vmx/svm) detected."
+  else
+    echo "No CPU virtualization flags (vmx or svm) found in /proc/cpuinfo."
+  fi
+
+  if grep -Eiq 'hypervisor' /proc/cpuinfo; then
+    echo "Hypervisor flags found in /proc/cpuinfo."
+  else
+    echo "No hypervisor flags found in /proc/cpuinfo."
+  fi
+
+  echo
+  echo "=== Virtualization check complete ==="
+}
+
+
 # Collect environment variables
 collect_environment_variables() {
   echo "============================================================"
@@ -494,11 +539,12 @@ main() {
   local collect_docker=false
   local collect_boot_shutdown=false
   local collect_modules_drivers=false
+  local detect_virtualization=false
 
   local check_sudo_opt=false
 
   # Parse command line options
-  while getopts "ucsHtnfbprvelDAhBM" opt; do
+  while getopts "ucsHtnfbprvelDAhBMV" opt; do
     case $opt in
       u) collect_user=true ;;
       c) collect_command_paths=true ;;
@@ -517,6 +563,7 @@ main() {
       A) collect_all=true ;;
       B) collect_boot_shutdown=true ;;
       M) collect_modules_drivers=true ;;
+      V) detect_virtualization=true ;;
       h) show_help; exit 0 ;;
       *) show_help; exit 1 ;;
     esac
@@ -556,6 +603,7 @@ main() {
     collect_docker=true
     collect_boot_shutdown=true
     collect_modules_drivers=true
+    detect_virtualization=true
   fi
 
   # Run functions based on flags
@@ -565,6 +613,7 @@ main() {
   [ "$collect_boot_shutdown" = true ] && collect_boot_shutdown_history
   [ "$collect_hardware" = true ] && collect_hardware_info
   [ "$collect_modules_drivers" = true ] && collect_modules_drivers_info
+  [ "$detect_virtualization" = true ] && detect_virtualization_status
   [ "$collect_storage" = true ] && collect_storage_info
   [ "$collect_network" = true ] && collect_network_info
   [ "$collect_nfs" = true ] && collect_nfs_info
