@@ -47,7 +47,9 @@ The script is designed to streamline the process of providing relevant system co
 
 4. Reviewing the Output
 
-   Inspect the system_info.txt file for completeness. Ensure you redact or remove any sensitive data before sharing or using the output.
+   Inspect the output of the script thoroughly to ensure completeness and accuracy. While the script does not collect user credentials, tokens, or SSH user or host keys, it is still important to review the output carefully. Redact or remove any sensitive data that might inadvertently appear before sharing the file with ChatGPT or any external party.
+
+   **Note:** Sharing detailed information with ChatGPT may be necessary for it to address your question effectively. However, you should exercise caution and carefully evaluate what to include. Striking the right balance between providing enough context and protecting sensitive information is essential for both resolving your issue and maintaining privacy.
 
 5. Example Output
 

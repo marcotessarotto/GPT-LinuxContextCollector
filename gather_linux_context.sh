@@ -275,7 +275,7 @@ collect_services_status() {
   echo "               SYSTEMD SERVICES STATUS"
   echo "============================================================"
   if command -v systemctl >/dev/null 2>&1; then
-    systemctl list-units --type=service --all
+    systemctl --no-pager list-units --type=service --all
   else
     echo "systemctl not available. Checking SysV services (service --status-all):"
     service --status-all 2>/dev/null || echo "No SysV init or systemd found."
