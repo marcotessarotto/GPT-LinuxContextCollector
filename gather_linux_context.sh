@@ -4,8 +4,8 @@
 # A modular script to gather detailed system information from a Linux OS instance.
 # Designed for use with ChatGPT to provide context for troubleshooting or analysis.
 
-global version="1.0.0"
-global verbose_output=false
+version="1.0.0"
+verbose_output=false
 
 # Function to show help message
 show_help() {
@@ -301,7 +301,14 @@ collect_hardware_info() {
     lscpu | grep -E 'Model name|CPU\(s\)|MHz'
   else
     grep -E 'model name|cpu cores|cpu MHz' /proc/cpuinfo | uniq
-  fi
+  fi  
+
+  echo "---- Motherboard Info ----"
+  if command -v dmidecode >/dev/null 2>&1; then
+    sudo dmidecode -t baseboard | grep -E "Manufacturer:|Product Name:|Version:|Serial Number:"
+  else
+    echo "dmidecode not available or not installed. Cannot retrieve motherboard info."
+  fi  
 
   echo "---- Memory Info ----"
   free -h
